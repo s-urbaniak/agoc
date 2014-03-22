@@ -30,14 +30,14 @@ func main() {
 	cwin.Ctl("clean")
 	cwin.Fprintf("tag", "Get ")
 
-	var needrun = make(chan bool, 1)
+	var offsets = make(chan int, 1)
 
-	go sevents(swin, needrun)
+	go sevents(swin, offsets)
 	go cevents(cwin)
-	looper(swin, cwin, swinid, needrun)
+	looper(cwin, swinid, offsets)
 }
 
-func sevents(win *acme.Win, needrun chan bool) {
+func sevents(win *acme.Win, offsets chan int) {
 	for evt := range win.EventChan() {
 		switch evt.C2 {
 		case 'x', 'X':
@@ -46,7 +46,17 @@ func sevents(win *acme.Win, needrun chan bool) {
 				os.Exit(0)
 			}
 		case 'I':
-			needrun <- true
+			err := win.Ctl("addr=dot")
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			runeOffset, _, err := win.ReadAddr()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			offsets <- runeOffset
 		}
 		win.WriteEvent(evt)
 	}
@@ -65,19 +75,9 @@ func cevents(win *acme.Win) {
 	}
 }
 
-func looper(swin, cwin *acme.Win, swinid int, needrun chan bool) {
-	for _ = range needrun {
-		err := swin.Ctl("addr=dot")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		runeOffset, _, err := swin.ReadAddr()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		cmd := exec.Command("gocode", "autocomplete", strconv.Itoa(runeOffset))
+func looper(cwin *acme.Win, swinid int, offsets chan int) {
+	for o := range offsets {
+		cmd := exec.Command("gocode", "autocomplete", strconv.Itoa(o))
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
 			log.Fatal(err)
