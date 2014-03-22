@@ -13,14 +13,14 @@ import (
 )
 
 func main() {
-	// get source window
+	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
+
 	swin, swinid, err := acmeCurrentWin()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer swin.CloseFiles()
 
-	// create completion window
 	cwin, err := acme.New()
 	if err != nil {
 		log.Fatal(err)
@@ -48,7 +48,6 @@ func sevents(win *acme.Win, needrun chan bool) {
 		case 'I':
 			needrun <- true
 		}
-
 		win.WriteEvent(evt)
 	}
 }
@@ -61,9 +60,8 @@ func cevents(win *acme.Win) {
 				win.Ctl("delete")
 				os.Exit(0)
 			}
-
-			win.WriteEvent(evt)
 		}
+		win.WriteEvent(evt)
 	}
 }
 
@@ -98,6 +96,8 @@ func looper(swin, cwin *acme.Win, swinid int, needrun chan bool) {
 		}
 
 		go func() {
+			defer stdin.Close()
+
 			body, err := readBody(swinid)
 			if err != nil {
 				log.Fatal(err)
@@ -107,18 +107,17 @@ func looper(swin, cwin *acme.Win, swinid int, needrun chan bool) {
 			if err != nil {
 				log.Fatal(err)
 			}
-
-			stdin.Close()
 		}()
 
 		go func() {
+			defer stdout.Close()
+
 			buf := new(bytes.Buffer)
 			buf.ReadFrom(stdout)
 			_, err := cwin.Write("body", buf.Bytes())
 			if err != nil {
 				log.Fatal(err)
 			}
-			stdout.Close()
 			cwin.Fprintf("addr", "#0")
 			cwin.Ctl("dot=addr")
 			cwin.Ctl("show")
