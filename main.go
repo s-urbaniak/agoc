@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"code.google.com/p/goplan9/plan9/acme"
 )
@@ -34,7 +35,8 @@ func main() {
 
 	go sevents(swin, offsets)
 	go cevents(cwin)
-	looper(cwin, swinid, offsets)
+	debounced := debouncer(offsets, 300*time.Millisecond)
+	looper(cwin, swinid, debounced)
 }
 
 func sevents(win *acme.Win, offsets chan int) {
@@ -75,6 +77,38 @@ func cevents(win *acme.Win) {
 	}
 }
 
+func debouncer(inOffset chan int, delay time.Duration) chan int {
+	var prevCancel chan bool
+	outOffset := make(chan int)
+
+	go func() {
+		for curOffset := range inOffset {
+			if prevCancel != nil {
+				prevCancel <- true
+			}
+
+			timeout := make(chan bool, 1)
+			cancel := make(chan bool, 1)
+			prevCancel = cancel
+
+			go func() {
+				time.Sleep(delay)
+				timeout <- true
+			}()
+
+			go func() {
+				select {
+				case <-timeout:
+					outOffset <- curOffset
+				case <-cancel:
+				}
+			}()
+		}
+	}()
+
+	return outOffset
+}
+
 func looper(cwin *acme.Win, swinid int, offsets chan int) {
 	for o := range offsets {
 		cmd := exec.Command("gocode", "autocomplete", strconv.Itoa(o))
@@ -82,6 +116,7 @@ func looper(cwin *acme.Win, swinid int, offsets chan int) {
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			log.Fatal(err)
