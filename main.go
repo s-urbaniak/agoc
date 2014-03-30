@@ -32,7 +32,6 @@ func main() {
 	cwin.Fprintf("tag", "Get ")
 
 	var offsets = make(chan int, 1)
-
 	go sevents(swin, offsets)
 	go cevents(cwin)
 	debounced := debouncer(offsets, 300*time.Millisecond)
@@ -78,18 +77,18 @@ func cevents(win *acme.Win) {
 }
 
 func debouncer(inOffset chan int, delay time.Duration) chan int {
-	var prevCancel chan bool
+	var cancel chan bool
 	outOffset := make(chan int)
 
 	go func() {
 		for curOffset := range inOffset {
-			if prevCancel != nil {
-				prevCancel <- true
+			if cancel != nil {
+				cancel <- true
 			}
 
 			timeout := make(chan bool, 1)
-			cancel := make(chan bool, 1)
-			prevCancel = cancel
+			newCancel := make(chan bool, 1)
+			cancel = newCancel
 
 			go func() {
 				time.Sleep(delay)
@@ -100,7 +99,7 @@ func debouncer(inOffset chan int, delay time.Duration) chan int {
 				select {
 				case <-timeout:
 					outOffset <- curOffset
-				case <-cancel:
+				case <-newCancel:
 				}
 			}()
 		}
