@@ -86,18 +86,12 @@ func debouncer(inOffset chan int, delay time.Duration) chan int {
 				cancel <- true
 			}
 
-			timeout := make(chan bool, 1)
 			newCancel := make(chan bool, 1)
 			cancel = newCancel
 
 			go func() {
-				time.Sleep(delay)
-				timeout <- true
-			}()
-
-			go func() {
 				select {
-				case <-timeout:
+				case <-time.After(delay):
 					outOffset <- curOffset
 				case <-newCancel:
 				}
