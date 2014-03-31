@@ -77,14 +77,13 @@ func cevents(win *acme.Win) {
 }
 
 func debouncer(inOffset chan int, delay time.Duration) chan int {
-	var unsub chan bool
+	unsub := make(chan bool, 1)
 	outOffset := make(chan int)
 
 	go func() {
 		for curOffset := range inOffset {
-			if unsub != nil {
-				unsub <- true
-			}
+			unsub <- true
+			unsub = make(chan bool, 1)
 
 			go func() {
 				select {
@@ -93,8 +92,6 @@ func debouncer(inOffset chan int, delay time.Duration) chan int {
 				case <-unsub:
 				}
 			}()
-
-			unsub = make(chan bool, 1)
 		}
 	}()
 
