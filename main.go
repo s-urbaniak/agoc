@@ -77,23 +77,23 @@ func cevents(win *acme.Win) {
 }
 
 func debouncer(inOffset chan int, delay time.Duration) chan int {
-	var cancel chan bool
+	var prevSub chan bool
 	outOffset := make(chan int)
 
 	go func() {
 		for curOffset := range inOffset {
-			if cancel != nil {
-				cancel <- true
+			if prevSub != nil {
+				prevSub <- true
 			}
 
-			newCancel := make(chan bool, 1)
-			cancel = newCancel
+			sub := make(chan bool, 1)
+			prevSub = sub
 
 			go func() {
 				select {
 				case <-time.After(delay):
 					outOffset <- curOffset
-				case <-newCancel:
+				case <-sub:
 				}
 			}()
 		}
