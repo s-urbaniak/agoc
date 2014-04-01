@@ -2,6 +2,7 @@ package acmectl
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strconv"
@@ -123,4 +124,33 @@ func (ctl *AcmeCtl) GotoAddr(addr string) {
 	ctl.Win.Fprintf("addr", addr)
 	ctl.Win.Ctl("dot=addr")
 	ctl.Win.Ctl("show")
+}
+
+func (ctl AcmeCtl) ReadBody() ([]byte, error) {
+	rwin, err := acme.Open(ctl.id, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer rwin.CloseFiles()
+
+	var body []byte
+	buf := make([]byte, 8000)
+	for {
+		n, err := rwin.Read("body", buf)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		body = append(body, buf[0:n]...)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return body, nil
 }

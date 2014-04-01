@@ -8,9 +8,8 @@ import (
 	"os/exec"
 	"strconv"
 	"time"
-	"github.com/s-urbaniak/agoc/acmectl"
 
-	"code.google.com/p/goplan9/plan9/acme"
+	"github.com/s-urbaniak/agoc/acmectl"
 )
 
 func main() {
@@ -31,11 +30,12 @@ func main() {
 	cwin.Ctl("clean")
 	cwin.Fprintf("tag", "Get ")
 
-	var offsets = make(chan int, 1)
+	offsets := swin.OffsetChan()
+
 	go sevents(swin, offsets)
 	go cevents(cwin)
 	debounced := debouncer(offsets, 300*time.Millisecond)
-	looper(cwin, swin.WindowId(), debounced)
+	looper(cwin, swin, debounced)
 }
 
 func sevents(win *acmectl.AcmeCtl, offsets chan int) {
@@ -46,18 +46,6 @@ func sevents(win *acmectl.AcmeCtl, offsets chan int) {
 				win.Ctl("delete")
 				os.Exit(0)
 			}
-		case 'I':
-			err := win.Ctl("addr=dot")
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			runeOffset, _, err := win.ReadAddr()
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			offsets <- runeOffset
 		}
 		win.WriteEvent(evt)
 	}
@@ -76,7 +64,7 @@ func cevents(win *acmectl.AcmeCtl) {
 	}
 }
 
-func looper(cwin *acmectl.AcmeCtl, swinid int, offsets chan int) {
+func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets chan int) {
 	for o := range offsets {
 		cmd := exec.Command("gocode", "autocomplete", strconv.Itoa(o))
 		stdin, err := cmd.StdinPipe()
@@ -89,9 +77,7 @@ func looper(cwin *acmectl.AcmeCtl, swinid int, offsets chan int) {
 			log.Fatal(err)
 		}
 
-		cwin.Addr(",")
-		cwin.Write("data", nil)
-		cwin.Ctl("clean")
+		cwin.ClearBody()
 
 		if err := cmd.Start(); err != nil {
 			cwin.Fprintf("body", "%s\n", err)
@@ -100,7 +86,7 @@ func looper(cwin *acmectl.AcmeCtl, swinid int, offsets chan int) {
 		go func() {
 			defer stdin.Close()
 
-			body, err := readBody(swinid)
+			body, err := swin.ReadBody()
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -120,39 +106,9 @@ func looper(cwin *acmectl.AcmeCtl, swinid int, offsets chan int) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			cwin.Fprintf("addr", "#0")
-			cwin.Ctl("dot=addr")
-			cwin.Ctl("show")
+
+			cwin.GotoAddr("#0")
 			cwin.Ctl("clean")
 		}()
 	}
-}
-
-func readBody(id int) ([]byte, error) {
-	rwin, err := acme.Open(id, nil)
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer rwin.CloseFiles()
-
-	var body []byte
-	buf := make([]byte, 8000)
-	for {
-		n, err := rwin.Read("body", buf)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		body = append(body, buf[0:n]...)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return body, nil
 }
