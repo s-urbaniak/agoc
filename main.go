@@ -21,47 +21,50 @@ func main() {
 	}
 	defer swin.CloseFiles()
 
-	cwin, err := acmectl.New()
+	cwin, err := newAgocWindow()
 	if err != nil {
 		log.Fatal(err)
 	}
-	pwd, _ := os.Getwd()
-	cwin.Name(pwd + "/+agoc")
-	cwin.Ctl("clean")
-	cwin.Fprintf("tag", "Get ")
+	defer cwin.CloseFiles()
 
-	offsets := swin.OffsetChan()
+	deletes := merge(cwin.DelChan(), swin.DelChan())
+	go func() {
+		<-deletes
+		os.Exit(0)
+	}()
 
-	go sevents(swin, offsets)
-	go cevents(cwin)
+	offsets := sevents(swin.OffsetChan())
 	debounced := debouncer(offsets, 300*time.Millisecond)
 	looper(cwin, swin, debounced)
 }
 
-func sevents(win *acmectl.AcmeCtl, offsets chan int) {
-	for evt := range win.EventChan() {
-		switch evt.C2 {
-		case 'x', 'X':
-			if string(evt.Text) == "Del" {
-				win.Ctl("delete")
-				os.Exit(0)
-			}
-		}
-		win.WriteEvent(evt)
+func newAgocWindow() (*acmectl.AcmeCtl, error) {
+	cwin, err := acmectl.New()
+	if err != nil {
+		return nil, err
 	}
+
+	pwd, _ := os.Getwd()
+	cwin.Name(pwd + "/+agoc")
+	cwin.Ctl("clean")
+	cwin.Fprintf("tag", "Get ")
+	return cwin, nil
 }
 
-func cevents(win *acmectl.AcmeCtl) {
-	for evt := range win.EventChan() {
-		switch evt.C2 {
-		case 'x', 'X':
-			if string(evt.Text) == "Del" {
-				win.Ctl("delete")
-				os.Exit(0)
+func sevents(offsetEvents <-chan acmectl.OffsetEvt) chan int {
+	offsets := make(chan int)
+
+	go func() {
+		for evt := range offsetEvents {
+			if evt.Err != nil {
+				log.Fatal(evt.Err)
 			}
+
+			offsets <- evt.Offset
 		}
-		win.WriteEvent(evt)
-	}
+	}()
+
+	return offsets
 }
 
 func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets chan int) {

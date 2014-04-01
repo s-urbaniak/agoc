@@ -19,8 +19,8 @@ type AcmeCtl struct {
 }
 
 type OffsetEvt struct {
-	offset int
-	err    error
+	Offset int
+	Err    error
 }
 
 func CurrentWindow() (*AcmeCtl, error) {
