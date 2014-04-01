@@ -2,13 +2,13 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"strconv"
 	"time"
+	"github.com/s-urbaniak/agoc/acmectl"
 
 	"code.google.com/p/goplan9/plan9/acme"
 )
@@ -16,13 +16,13 @@ import (
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 
-	swin, swinid, err := acmeCurrentWin()
+	swin, err := acmectl.CurrentWindow()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer swin.CloseFiles()
 
-	cwin, err := acme.New()
+	cwin, err := acmectl.New()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -35,10 +35,10 @@ func main() {
 	go sevents(swin, offsets)
 	go cevents(cwin)
 	debounced := debouncer(offsets, 300*time.Millisecond)
-	looper(cwin, swinid, debounced)
+	looper(cwin, swin.WindowId(), debounced)
 }
 
-func sevents(win *acme.Win, offsets chan int) {
+func sevents(win *acmectl.AcmeCtl, offsets chan int) {
 	for evt := range win.EventChan() {
 		switch evt.C2 {
 		case 'x', 'X':
@@ -63,7 +63,7 @@ func sevents(win *acme.Win, offsets chan int) {
 	}
 }
 
-func cevents(win *acme.Win) {
+func cevents(win *acmectl.AcmeCtl) {
 	for evt := range win.EventChan() {
 		switch evt.C2 {
 		case 'x', 'X':
@@ -76,29 +76,7 @@ func cevents(win *acme.Win) {
 	}
 }
 
-func debouncer(inOffset chan int, delay time.Duration) chan int {
-	unsub := make(chan bool, 1)
-	outOffset := make(chan int)
-
-	go func() {
-		for curOffset := range inOffset {
-			unsub <- true
-			unsub = make(chan bool, 1)
-
-			go func() {
-				select {
-				case <-time.After(delay):
-					outOffset <- curOffset
-				case <-unsub:
-				}
-			}()
-		}
-	}()
-
-	return outOffset
-}
-
-func looper(cwin *acme.Win, swinid int, offsets chan int) {
+func looper(cwin *acmectl.AcmeCtl, swinid int, offsets chan int) {
 	for o := range offsets {
 		cmd := exec.Command("gocode", "autocomplete", strconv.Itoa(o))
 		stdin, err := cmd.StdinPipe()
@@ -177,23 +155,4 @@ func readBody(id int) ([]byte, error) {
 	}
 
 	return body, nil
-}
-
-func acmeCurrentWin() (*acme.Win, int, error) {
-	winid := os.Getenv("winid")
-	if winid == "" {
-		return nil, 0, fmt.Errorf("$winid not set - not running inside acme?")
-	}
-
-	id, err := strconv.Atoi(winid)
-	if err != nil {
-		return nil, 0, fmt.Errorf("invalid $winid %q", winid)
-	}
-
-	win, err := acme.Open(id, nil)
-	if err != nil {
-		return nil, 0, fmt.Errorf("cannot open acme window: %v", err)
-	}
-
-	return win, id, nil
 }
