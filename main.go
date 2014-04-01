@@ -67,7 +67,7 @@ func sevents(offsetEvents <-chan acmectl.OffsetEvt) chan int {
 	return offsets
 }
 
-func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets chan int) {
+func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets <-chan int) {
 	for o := range offsets {
 		cmd := exec.Command("gocode", "autocomplete", strconv.Itoa(o))
 		stdin, err := cmd.StdinPipe()
@@ -113,5 +113,10 @@ func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets chan int) {
 			cwin.GotoAddr("#0")
 			cwin.Ctl("clean")
 		}()
+
+		err = cmd.Wait()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
