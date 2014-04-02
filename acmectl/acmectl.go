@@ -107,16 +107,42 @@ func (ctl AcmeCtl) WindowId() int {
 	return ctl.id
 }
 
-func (ctl *AcmeCtl) ClearBody() {
-	ctl.Win.Addr(",")
-	ctl.Win.Write("data", nil)
-	ctl.Win.Ctl("clean")
+func (ctl *AcmeCtl) ClearBody() error {
+	err := ctl.Win.Addr(",")
+	if err != nil {
+		return err
+	}
+
+	_, err = ctl.Win.Write("data", nil)
+	if err != nil {
+		return err
+	}	
+
+	err = ctl.Win.Ctl("clean")
+	if err != nil {
+		return err
+	}
+	
+	return nil
 }
 
-func (ctl *AcmeCtl) GotoAddr(addr string) {
-	ctl.Win.Fprintf("addr", addr)
-	ctl.Win.Ctl("dot=addr")
-	ctl.Win.Ctl("show")
+func (ctl *AcmeCtl) GotoAddr(addr string) error {
+	err := ctl.Win.Fprintf("addr", addr)
+	if err != nil {
+		return err
+	}
+
+	err = ctl.Win.Ctl("dot=addr")
+	if err != nil {
+		return err
+	}
+	
+	err = ctl.Win.Ctl("show")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (ctl AcmeCtl) ReadBody() ([]byte, error) {

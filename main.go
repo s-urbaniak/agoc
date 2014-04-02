@@ -119,7 +119,7 @@ func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets <-chan int) {
 
 			cwin.GotoAddr("#0")
 			cwin.Ctl("clean")
-			cwin.Ctl("show")
+
 		}()
 
 		err = cmd.Wait()
