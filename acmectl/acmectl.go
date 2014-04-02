@@ -95,6 +95,7 @@ func (ctl *AcmeCtl) WinEvtChannel() chan WinEvt {
 					evtChan <- WinEvt{-1, true, nil}
 				}
 			}
+
 			ctl.Win.WriteEvent(evt)
 		}
 	}()
