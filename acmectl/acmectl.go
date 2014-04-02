@@ -70,6 +70,27 @@ func New() (*AcmeCtl, error) {
 	return ctl, err
 }
 
+func (ctl *AcmeCtl) WinDelChannel() chan bool {
+	evtChan := make(chan bool)
+
+	go func() {
+		for evt := range ctl.Win.EventChan() {
+			switch evt.C2 {
+
+			case 'x', 'X':
+				if string(evt.Text) == "Del" {
+					ctl.Win.Ctl("delete")
+					evtChan <- true
+				}
+			}
+
+			ctl.Win.WriteEvent(evt)
+		}
+	}()
+
+	return evtChan
+}
+
 func (ctl *AcmeCtl) WinEvtChannel() chan WinEvt {
 	evtChan := make(chan WinEvt)
 

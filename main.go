@@ -27,7 +27,7 @@ func main() {
 	}
 	defer cwin.CloseFiles()
 
-	cDelChan, sDelChan, sOffsetChan := make(chan bool), make(chan bool), make(chan int)
+	sDelChan, sOffsetChan := make(chan bool), make(chan int)
 
 	go func() {
 		for evt := range swin.WinEvtChannel() {
@@ -41,17 +41,7 @@ func main() {
 		}
 	}()
 
-	go func() {
-		for evt := range cwin.WinEvtChannel() {
-			if evt.Err != nil {
-				log.Fatal(evt.Err)
-			} else if evt.Del {
-				cDelChan <- true
-			}
-		}
-	}()
-
-	deletes := merge(cDelChan, sDelChan)
+	deletes := merge(cwin.WinDelChannel(), sDelChan)
 	go func() {
 		<-deletes
 		os.Exit(0)
@@ -88,7 +78,7 @@ func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets <-chan int) {
 		}
 
 		if err := cmd.Start(); err != nil {
-			cwin.Fprintf("body", "%s\n", err)
+			cwin.Fprintf("body", "Error: %s\n", err)
 		}
 
 		go func() {
@@ -119,7 +109,6 @@ func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets <-chan int) {
 
 			cwin.GotoAddr("#0")
 			cwin.Ctl("clean")
-
 		}()
 
 		err = cmd.Wait()
