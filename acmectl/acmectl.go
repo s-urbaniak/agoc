@@ -18,8 +18,9 @@ type AcmeCtl struct {
 	id int
 }
 
-type OffsetEvt struct {
+type WinEvt struct {
 	Offset int
+	Del    bool
 	Err    error
 }
 
@@ -39,7 +40,11 @@ func CurrentWindow() (*AcmeCtl, error) {
 		return nil, fmt.Errorf("cannot open acme window: %v", err)
 	}
 
-	return &AcmeCtl{win, id}, nil
+	ctl := &AcmeCtl{}
+	ctl.Win = win
+	ctl.id = id
+
+	return ctl, nil
 }
 
 func New() (*AcmeCtl, error) {
@@ -65,12 +70,8 @@ func New() (*AcmeCtl, error) {
 	return ctl, err
 }
 
-func (ctl AcmeCtl) WindowId() int {
-	return ctl.id
-}
-
-func (ctl AcmeCtl) OffsetChan() <-chan OffsetEvt {
-	offsets := make(chan OffsetEvt)
+func (ctl *AcmeCtl) WinEvtChannel() chan WinEvt {
+	evtChan := make(chan WinEvt)
 
 	go func() {
 		for evt := range ctl.Win.EventChan() {
@@ -78,40 +79,31 @@ func (ctl AcmeCtl) OffsetChan() <-chan OffsetEvt {
 			case 'I':
 				err := ctl.Win.Ctl("addr=dot")
 				if err != nil {
-					offsets <- OffsetEvt{-1, err}
+					evtChan <- WinEvt{-1, false, err}
 				}
 
 				runeOffset, _, err := ctl.Win.ReadAddr()
 				if err != nil {
-					offsets <- OffsetEvt{-1, err}
+					evtChan <- WinEvt{-1, false, err}
 				}
 
-				offsets <- OffsetEvt{runeOffset, nil}
-			}
-			ctl.Win.WriteEvent(evt)
-		}
-	}()
+				evtChan <- WinEvt{runeOffset, false, nil}
 
-	return offsets
-}
-
-func (ctl AcmeCtl) DelChan() <-chan bool {
-	del := make(chan bool)
-
-	go func() {
-		for evt := range ctl.Win.EventChan() {
-			switch evt.C2 {
 			case 'x', 'X':
 				if string(evt.Text) == "Del" {
 					ctl.Win.Ctl("delete")
-					del <- true
+					evtChan <- WinEvt{-1, true, nil}
 				}
 			}
 			ctl.Win.WriteEvent(evt)
 		}
 	}()
 
-	return del
+	return evtChan
+}
+
+func (ctl AcmeCtl) WindowId() int {
+	return ctl.id
 }
 
 func (ctl *AcmeCtl) ClearBody() {

@@ -27,14 +27,37 @@ func main() {
 	}
 	defer cwin.CloseFiles()
 
-	deletes := merge(cwin.DelChan(), swin.DelChan())
+	cDelChan, sDelChan, sOffsetChan := make(chan bool), make(chan bool), make(chan int)
+
+	go func() {
+		for evt := range swin.WinEvtChannel() {
+			if evt.Err != nil {
+				log.Fatal(evt.Err)
+			} else if evt.Del {
+				sDelChan <- true
+			} else {
+				sOffsetChan <- evt.Offset
+			}
+		}
+	}()
+
+	go func() {
+		for evt := range cwin.WinEvtChannel() {
+			if evt.Err != nil {
+				log.Fatal(evt.Err)
+			} else if evt.Del {
+				cDelChan <- true
+			}
+		}
+	}()
+
+	deletes := merge(cDelChan, sDelChan)
 	go func() {
 		<-deletes
 		os.Exit(0)
 	}()
 
-	offsets := sevents(swin.OffsetChan())
-	debounced := debouncer(offsets, 300*time.Millisecond)
+	debounced := debouncer(sOffsetChan, 300*time.Millisecond)
 	looper(cwin, swin, debounced)
 }
 
@@ -49,22 +72,6 @@ func newAgocWindow() (*acmectl.AcmeCtl, error) {
 	cwin.Ctl("clean")
 	cwin.Fprintf("tag", "Get ")
 	return cwin, nil
-}
-
-func sevents(offsetEvents <-chan acmectl.OffsetEvt) chan int {
-	offsets := make(chan int)
-
-	go func() {
-		for evt := range offsetEvents {
-			if evt.Err != nil {
-				log.Fatal(evt.Err)
-			}
-
-			offsets <- evt.Offset
-		}
-	}()
-
-	return offsets
 }
 
 func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets <-chan int) {
