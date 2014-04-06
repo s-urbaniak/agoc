@@ -1,25 +1,35 @@
 package main
 
-import "time"
+import (
+	"time"
+)
 
-func debouncer(inOffset chan int, delay time.Duration) chan int {
-	unsub := make(chan bool, 1)
-	outOffset := make(chan int)
+func debouncer(offsets chan int, delay time.Duration) chan int {
+	out := make(chan int)
+	unsub := func() {} //nop
 
 	go func() {
-		for curOffset := range inOffset {
-			unsub <- true
-			unsub = make(chan bool, 1)
-
-			go func() {
-				select {
-				case <-time.After(delay):
-					outOffset <- curOffset
-				case <-unsub:
-				}
-			}()
+		for o := range offsets {
+			unsub()
+			unsub = emitAfter(o, out, delay)
 		}
 	}()
 
-	return outOffset
+	return out
+}
+
+func emitAfter(offset int, out chan int, delay time.Duration) func() {
+	unsub := make(chan bool, 1)
+
+	go func() {
+		select {
+		case <-time.After(delay):
+			out <- offset
+		case <-unsub:
+		}
+	}()
+
+	return func() {
+		unsub <- true
+	}
 }

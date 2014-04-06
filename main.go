@@ -102,6 +102,7 @@ func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets <-chan int) {
 			buf.ReadFrom(stdout)
 
 			cwin.ClearBody()
+
 			_, err := cwin.Write("body", buf.Bytes())
 			if err != nil {
 				log.Fatal(err)
@@ -109,11 +110,11 @@ func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets <-chan int) {
 
 			cwin.GotoAddr("#0")
 			cwin.Ctl("clean")
-		}()
 
-		err = cmd.Wait()
-		if err != nil {
-			log.Fatal(err)
-		}
+			err = cmd.Wait()
+			if err != nil {
+				log.Fatal(err)
+			}
+		}()
 	}
 }
