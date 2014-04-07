@@ -6,30 +6,22 @@ import (
 
 func debouncer(offsets chan int, delay time.Duration) chan int {
 	out := make(chan int)
-	unsub := func() {} //nop
+	cancel := make(chan bool, 1)
 
 	go func() {
 		for o := range offsets {
-			unsub()
-			unsub = emitAfter(o, out, delay)
+			cancel <- true
+			cancel = make(chan bool, 1)
+
+			go func(o int, cancel chan bool) {
+				select {
+				case <-time.After(delay):
+					out <- o
+				case <-cancel:
+				}
+			}(o, cancel)
 		}
 	}()
 
 	return out
-}
-
-func emitAfter(offset int, out chan int, delay time.Duration) func() {
-	unsub := make(chan bool, 1)
-
-	go func() {
-		select {
-		case <-time.After(delay):
-			out <- offset
-		case <-unsub:
-		}
-	}()
-
-	return func() {
-		unsub <- true
-	}
 }
