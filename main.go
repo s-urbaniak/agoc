@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/s-urbaniak/agoc/acmectl"
+	"github.com/s-urbaniak/apl/acmectl"
 )
 
 func main() {
