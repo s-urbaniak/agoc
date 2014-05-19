@@ -9,13 +9,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/s-urbaniak/apl/acmectl"
+	"github.com/s-urbaniak/apl/acme"
 )
 
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 
-	swin, err := acmectl.CurrentWindow()
+	swin, err := acme.CurrentWindow()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,8 +51,8 @@ func main() {
 	looper(cwin, swin, debounced)
 }
 
-func newAgocWindow() (*acmectl.AcmeCtl, error) {
-	cwin, err := acmectl.New()
+func newAgocWindow() (*acme.AcmeCtl, error) {
+	cwin, err := acme.New()
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func newAgocWindow() (*acmectl.AcmeCtl, error) {
 	return cwin, nil
 }
 
-func looper(cwin *acmectl.AcmeCtl, swin *acmectl.AcmeCtl, offsets <-chan int) {
+func looper(cwin *acme.AcmeCtl, swin *acme.AcmeCtl, offsets <-chan int) {
 	for o := range offsets {
 		cmd := exec.Command("gocode", "autocomplete", strconv.Itoa(o))
 		stdin, err := cmd.StdinPipe()
