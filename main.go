@@ -51,7 +51,7 @@ func main() {
 	looper(cwin, swin, debounced)
 }
 
-func newAgocWindow() (*acme.AcmeCtl, error) {
+func newAgocWindow() (*acme.Win, error) {
 	cwin, err := acme.New()
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func newAgocWindow() (*acme.AcmeCtl, error) {
 	return cwin, nil
 }
 
-func looper(cwin *acme.AcmeCtl, swin *acme.AcmeCtl, offsets <-chan int) {
+func looper(cwin *acme.Win, swin *acme.Win, offsets <-chan int) {
 	for o := range offsets {
 		cmd := exec.Command("gocode", "autocomplete", strconv.Itoa(o))
 		stdin, err := cmd.StdinPipe()
