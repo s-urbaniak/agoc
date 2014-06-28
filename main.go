@@ -15,7 +15,12 @@ import (
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 
-	swin, err := acme.CurrentWindow()
+    id, err := acme.GetWinid()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+	swin, err := acme.GetWin(id)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -30,7 +35,7 @@ func main() {
 	sDelChan, sOffsetChan := make(chan bool), make(chan int)
 
 	go func() {
-		for evt := range swin.WinEvtChannel() {
+		for evt := range swin.EvtChannel(acme.Soffset | acme.Sdel) {
 			if evt.Err != nil {
 				log.Fatal(evt.Err)
 			} else if evt.Del {
@@ -41,7 +46,14 @@ func main() {
 		}
 	}()
 
-	deletes := merge(cwin.WinDelChannel(), sDelChan)
+    cDelChan := make(chan bool)
+    go func() {
+        for _ = range cwin.EvtChannel(acme.Sdel) {
+            cDelChan<- true
+        }
+    }()
+
+	deletes := merge(cDelChan, sDelChan)
 	go func() {
 		<-deletes
 		os.Exit(0)
