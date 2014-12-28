@@ -15,10 +15,10 @@ import (
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 
-    id, err := acme.GetWinid()
-    if err != nil {
-        log.Fatal(err)
-    }
+	id, err := acme.GetWinid()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	swin, err := acme.GetWin(id)
 	if err != nil {
@@ -46,12 +46,12 @@ func main() {
 		}
 	}()
 
-    cDelChan := make(chan bool)
-    go func() {
-        for _ = range cwin.EvtChannel(acme.Sdel) {
-            cDelChan<- true
-        }
-    }()
+	cDelChan := make(chan bool)
+	go func() {
+		for _ = range cwin.EvtChannel(acme.Sdel) {
+			cDelChan <- true
+		}
+	}()
 
 	deletes := merge(cDelChan, sDelChan)
 	go func() {
