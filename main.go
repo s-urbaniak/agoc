@@ -1,3 +1,4 @@
+// agoc is a tool for code completion inside the acme editor
 package main
 
 import (
