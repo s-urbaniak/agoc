@@ -12,6 +12,37 @@ import (
 	"github.com/s-urbaniak/apl/acme"
 )
 
+type swinHandler struct {
+	offset chan int
+	del    chan bool
+}
+
+func (s swinHandler) KeyPress(offset int) {
+	s.offset <- offset
+}
+
+func (s swinHandler) Del() {
+	s.del <- true
+}
+
+func (s swinHandler) Err(err error) {
+	log.Fatal(err)
+}
+
+type cwinHandler struct {
+	del chan bool
+}
+
+func (c cwinHandler) Del() {
+	c.del <- true
+}
+
+func (c cwinHandler) KeyPress(offset int) {}
+
+func (c cwinHandler) Err(err error) {
+	log.Fatal(err)
+}
+
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 
@@ -33,25 +64,10 @@ func main() {
 	defer cwin.CloseFiles()
 
 	sDelChan, sOffsetChan := make(chan bool), make(chan int)
-
-	go func() {
-		for evt := range swin.EvtChannel(acme.Soffset | acme.Sdel) {
-			if evt.Err != nil {
-				log.Fatal(evt.Err)
-			} else if evt.Del {
-				sDelChan <- true
-			} else {
-				sOffsetChan <- evt.Offset
-			}
-		}
-	}()
+	swin.HandleEvt(swinHandler{sOffsetChan, sDelChan})
 
 	cDelChan := make(chan bool)
-	go func() {
-		for _ = range cwin.EvtChannel(acme.Sdel) {
-			cDelChan <- true
-		}
-	}()
+	cwin.HandleEvt(cwinHandler{cDelChan})
 
 	deletes := merge(cDelChan, sDelChan)
 	go func() {
