@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/s-urbaniak/apl/acme"
+	"github.com/s-urbaniak/acme"
 )
 
 type swinHandler struct {
@@ -46,7 +46,7 @@ func (c cwinHandler) Err(err error) {
 func main() {
 	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 
-	id, err := acme.GetWinid()
+	id, err := acme.GetWinID()
 	if err != nil {
 		log.Fatal(err)
 	}
