@@ -15,15 +15,17 @@ import (
 
 type swinHandler struct {
 	offset chan int
-	del    chan bool
+	del    chan struct{}
 }
+
+var _ acme.EvtHandler = (*swinHandler)(nil)
 
 func (s swinHandler) BodyInsert(offset int) {
 	s.offset <- offset
 }
 
 func (s swinHandler) Del() {
-	s.del <- true
+	s.del <- struct{}{}
 }
 
 func (s swinHandler) Err(err error) {
@@ -31,11 +33,13 @@ func (s swinHandler) Err(err error) {
 }
 
 type cwinHandler struct {
-	del chan bool
+	del chan struct{}
 }
 
+var _ acme.EvtHandler = (*cwinHandler)(nil)
+
 func (c cwinHandler) Del() {
-	c.del <- true
+	c.del <- struct{}{}
 }
 
 func (c cwinHandler) BodyInsert(offset int) {}
@@ -64,10 +68,10 @@ func main() {
 	}
 	defer cwin.CloseFiles()
 
-	sDelChan, sOffsetChan := make(chan bool), make(chan int)
+	sDelChan, sOffsetChan := make(chan struct{}), make(chan int)
 	swin.HandleEvt(swinHandler{sOffsetChan, sDelChan})
 
-	cDelChan := make(chan bool)
+	cDelChan := make(chan struct{})
 	cwin.HandleEvt(cwinHandler{cDelChan})
 
 	deletes := merge(cDelChan, sDelChan)

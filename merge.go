@@ -2,15 +2,15 @@ package main
 
 import "sync"
 
-func merge(cs ...<-chan bool) <-chan bool {
+func merge(cs ...<-chan struct{}) <-chan struct{} {
 	var wg sync.WaitGroup
-	out := make(chan bool)
+	out := make(chan struct{})
 
 	// Start an output goroutine for each input channel in cs.  output
 	// copies values from c to out until c is closed, then calls wg.Done.
-	output := func(c <-chan bool) {
-		for n := range c {
-			out <- n
+	output := func(c <-chan struct{}) {
+		for range c {
+			out <- struct{}{}
 		}
 		wg.Done()
 	}
