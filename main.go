@@ -18,7 +18,7 @@ type swinHandler struct {
 	del    chan bool
 }
 
-func (s swinHandler) KeyPress(offset int) {
+func (s swinHandler) BodyInsert(offset int) {
 	s.offset <- offset
 }
 
@@ -38,7 +38,7 @@ func (c cwinHandler) Del() {
 	c.del <- true
 }
 
-func (c cwinHandler) KeyPress(offset int) {}
+func (c cwinHandler) BodyInsert(offset int) {}
 
 func (c cwinHandler) Err(err error) {
 	log.Fatal(err)
