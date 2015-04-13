@@ -1,3 +1,5 @@
+[![Build Status](https://drone.io/github.com/s-urbaniak/agoc/status.png)](https://drone.io/github.com/s-urbaniak/agoc/latest)
+
 ## Go Autocompletion for the acme editor
 
 ### Usage
