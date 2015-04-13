@@ -30,5 +30,6 @@ func TestMerge(t *testing.T) {
 	go f(c2)
 
 	x := merge(c1, c2)
-	<-x; <-x
+	<-x
+	<-x
 }
