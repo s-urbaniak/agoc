@@ -2,7 +2,6 @@
 package main
 
 import (
-	"bytes"
 	"io"
 	"log"
 	"os"
@@ -33,6 +32,7 @@ func (s swinHandler) Err(err error) {
 }
 
 type cwinHandler struct {
+	win *acme.Win
 	del chan struct{}
 }
 
@@ -42,7 +42,12 @@ func (c cwinHandler) Del() {
 	c.del <- struct{}{}
 }
 
-func (c cwinHandler) BodyInsert(offset int) {}
+func (c cwinHandler) BodyInsert(offset int) {
+	c.win.Fprintf("addr", "#0")
+	c.win.Ctl("dot=addr")
+	c.win.Ctl("show")
+	c.win.Ctl("clean")
+}
 
 func (c cwinHandler) Err(err error) {
 	log.Fatal(err)
@@ -72,7 +77,7 @@ func main() {
 	swin.HandleEvt(swinHandler{sOffsetChan, sDelChan})
 
 	cDelChan := make(chan struct{})
-	cwin.HandleEvt(cwinHandler{cDelChan})
+	cwin.HandleEvt(cwinHandler{cwin, cDelChan})
 
 	deletes := merge(cDelChan, sDelChan)
 	go func() {
@@ -106,6 +111,8 @@ func looper(cwin *acme.Win, swin *acme.Win, offsets <-chan int) {
 		}
 
 		stdout, err := cmd.StdoutPipe()
+		defer stdout.Close()
+
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -117,34 +124,26 @@ func looper(cwin *acme.Win, swin *acme.Win, offsets <-chan int) {
 		go func() {
 			defer stdin.Close()
 
-			body, err := swin.ReadBody()
+			srcBody, err := swin.ReadBody()
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			_, err = io.WriteString(stdin, string(body))
+			_, err = io.WriteString(stdin, string(srcBody))
 			if err != nil {
 				log.Fatal(err)
 			}
 		}()
 
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(stdout)
-
 		cwin.ClearBody()
-
-		_, err = cwin.Write("body", buf.Bytes())
+		_, err = io.Copy(cwin.BodyWriter(), stdout)
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		cwin.GotoAddr("#0")
-		cwin.Ctl("clean")
 
 		err = cmd.Wait()
 		if err != nil {
 			log.Fatal(err)
 		}
-		stdout.Close()
 	}
 }
