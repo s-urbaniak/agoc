@@ -136,7 +136,7 @@ func looper(cwin *acme.Win, swin *acme.Win, offsets <-chan int) {
 		}()
 
 		cwin.ClearBody()
-		_, err = io.Copy(cwin.FileWriter("body"), stdout)
+		_, err = io.Copy(cwin.FileReadWriter("body"), stdout)
 		if err != nil {
 			log.Fatal(err)
 		}
