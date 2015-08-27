@@ -7,143 +7,215 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
+	acme9 "9fans.net/go/acme"
 	"github.com/s-urbaniak/acme"
 )
 
-type swinHandler struct {
-	offset chan int
-	del    chan struct{}
-}
-
-var _ acme.EvtHandler = (*swinHandler)(nil)
-
-func (s swinHandler) BodyInsert(offset int) {
-	s.offset <- offset
-}
-
-func (s swinHandler) Del() {
-	s.del <- struct{}{}
-}
-
-func (s swinHandler) Err(err error) {
-	log.Fatal(err)
-}
-
-type cwinHandler struct {
-	win *acme.Win
-	del chan struct{}
-}
-
-var _ acme.EvtHandler = (*cwinHandler)(nil)
-
-func (c cwinHandler) Del() {
-	c.del <- struct{}{}
-}
-
-func (c cwinHandler) BodyInsert(offset int) {
-	c.win.Fprintf("addr", "#0")
-	c.win.Ctl("dot=addr")
-	c.win.Ctl("show")
-	c.win.Ctl("clean")
-}
-
-func (c cwinHandler) Err(err error) {
-	log.Fatal(err)
+type offset struct {
+	id, offset int
 }
 
 func main() {
-	log.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	id, err := acme.GetWinID()
+	agoc, err := agoc()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	swin, err := acme.GetWin(id)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer swin.CloseFiles()
-
-	cwin, err := newAgocWindow()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer cwin.CloseFiles()
-
-	sDelChan, sOffsetChan := make(chan struct{}), make(chan int)
-	swin.HandleEvt(swinHandler{sOffsetChan, sDelChan})
-
-	cDelChan := make(chan struct{})
-	cwin.HandleEvt(cwinHandler{cwin, cDelChan})
-
-	deletes := merge(cDelChan, sDelChan)
-	go func() {
-		<-deletes
-		os.Exit(0)
-	}()
-
-	debounced := debouncer(sOffsetChan, 300*time.Millisecond)
-	looper(cwin, swin, debounced)
+	looper(agoc)
 }
 
-func newAgocWindow() (*acme.Win, error) {
-	cwin, err := acme.New()
+func looper(agoc *acme.Win) {
+	logEvt := logEvtChan()
+	opened := make(map[int]struct{})
+	offsetChan := make(chan offset)
+
+	for {
+		select {
+		case o := <-offsetChan:
+			complete(o, agoc)
+		case evt := <-logEvt:
+			switch evt.Op {
+			case "del":
+				delete(opened, evt.ID)
+			case "focus":
+				if _, ok := opened[evt.ID]; !ok {
+					opened[evt.ID] = struct{}{}
+
+					srcChan := src(evt.ID)
+					id := evt.ID
+					go func() {
+						for o := range srcChan {
+							offsetChan <- offset{id, o}
+						}
+					}()
+				}
+			}
+		}
+	}
+}
+
+func complete(o offset, agoc *acme.Win) {
+	srcWin, err := acme.GetWin(o.id)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	cmd := exec.Command("gocode", "autocomplete", strconv.Itoa(o.offset))
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stdout.Close()
+
+	if err := cmd.Start(); err != nil {
+		log.Fatal(err)
+	}
+
+	go func() {
+		defer func() {
+			srcWin.CloseFiles()
+			stdin.Close()
+		}()
+
+		_, err := io.Copy(stdin, srcWin.FileReadWriter("body"))
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	agoc.ClearBody()
+
+	_, err = io.Copy(agoc.FileReadWriter("body"), stdout)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	agoc.Fprintf("addr", "#0")
+	agoc.Ctl("dot=addr")
+	agoc.Ctl("show")
+	agoc.Ctl("clean")
+
+	err = cmd.Wait()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func logEvtChan() <-chan acme9.LogEvent {
+	acmeLog, err := acme9.Log()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	events := make(chan acme9.LogEvent)
+
+	go func() {
+		for {
+			evt, err := acmeLog.Read()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			if strings.HasSuffix(evt.Name, ".go") {
+				events <- evt
+			}
+		}
+	}()
+
+	return events
+}
+
+func src(id int) <-chan int {
+	offset := make(chan int)
+
+	win, err := acme.GetWin(id)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go func() {
+		defer func() {
+			win.CloseFiles()
+			close(offset)
+		}()
+
+		for {
+			evt, err := win.ReadEvent()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			switch evt.C2 {
+			case 'I':
+				err := win.Ctl("addr=dot")
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				q0, _, err := win.ReadAddr()
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				offset <- q0
+			case 'x', 'X':
+				evtText := string(evt.Text)
+
+				if evtText == "Del" || evtText == "Delete" {
+					win.Ctl("delete")
+					win.WriteEvent(evt)
+					return
+				}
+			}
+
+			win.WriteEvent(evt)
+		}
+	}()
+
+	return debouncer(offset, 300*time.Millisecond)
+}
+
+func agoc() (*acme.Win, error) {
+	agoc, err := acme.New()
 	if err != nil {
 		return nil, err
 	}
 
-	pwd, _ := os.Getwd()
-	cwin.Name(pwd + "/+agoc")
-	cwin.Ctl("clean")
-	cwin.Fprintf("tag", "Get ")
-	return cwin, nil
-}
+	agoc.Name("+agoc")
+	agoc.Ctl("clean")
+	agoc.Fprintf("tag", "Get ")
 
-func looper(cwin *acme.Win, swin *acme.Win, offsets <-chan int) {
-	for o := range offsets {
-		cmd := exec.Command("gocode", "autocomplete", strconv.Itoa(o))
-		stdin, err := cmd.StdinPipe()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		stdout, err := cmd.StdoutPipe()
-		defer stdout.Close()
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if err := cmd.Start(); err != nil {
-			cwin.Fprintf("body", "Error: %s\n", err)
-		}
-
-		go func() {
-			defer stdin.Close()
-
-			srcBody, err := swin.ReadBody()
+	go func() {
+		for {
+			evt, err := agoc.ReadEvent()
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			_, err = io.WriteString(stdin, string(srcBody))
-			if err != nil {
-				log.Fatal(err)
+			switch evt.C2 {
+			case 'x', 'X':
+				evtText := string(evt.Text)
+
+				if evtText == "Del" || evtText == "Delete" {
+					agoc.WriteEvent(evt)
+					os.Exit(0)
+				}
 			}
-		}()
 
-		cwin.ClearBody()
-		_, err = io.Copy(cwin.FileReadWriter("body"), stdout)
-		if err != nil {
-			log.Fatal(err)
+			agoc.WriteEvent(evt)
 		}
+	}()
 
-		err = cmd.Wait()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
+	return agoc, nil
 }
