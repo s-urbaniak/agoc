@@ -157,8 +157,18 @@ func src(id int) <-chan int {
 			}
 
 			switch evt.C2 {
-			case 'I':
-				err := win.Ctl("addr=dot")
+			case 'I', 'D':
+				tagb, err := win.ReadAll("tag")
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				tag := string(tagb)
+				if !strings.Contains(tag, "Put") {
+					win.Write("tag", []byte(" Put"))
+				}
+
+				err = win.Ctl("addr=dot")
 				if err != nil {
 					log.Fatal(err)
 				}
