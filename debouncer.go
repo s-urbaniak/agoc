@@ -14,6 +14,7 @@ func debouncer(offsets chan int, delay time.Duration) chan int {
 
 	go func() {
 		defer func() {
+			close(c)
 			wg.Wait()
 			close(out)
 		}()

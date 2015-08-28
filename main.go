@@ -62,8 +62,7 @@ func looper(agoc *acme.Win) {
 func complete(o offset, agoc *acme.Win) {
 	srcWin, err := acme.GetWin(o.id)
 	if err != nil {
-		log.Println(err)
-		return
+		log.Fatal(err)
 	}
 
 	cmd := exec.Command("gocode", "autocomplete", strconv.Itoa(o.offset))
@@ -150,6 +149,8 @@ func src(id int) <-chan int {
 			close(offset)
 		}()
 
+		var changed bool
+
 		for {
 			evt, err := win.ReadEvent()
 			if err != nil {
@@ -158,14 +159,18 @@ func src(id int) <-chan int {
 
 			switch evt.C2 {
 			case 'I', 'D':
-				tagb, err := win.ReadAll("tag")
-				if err != nil {
-					log.Fatal(err)
-				}
+				if !changed {
+					tagb, err := win.ReadAll("tag")
+					if err != nil {
+						log.Fatal(err)
+					}
 
-				tag := string(tagb)
-				if !strings.Contains(tag, "Put") {
-					win.Write("tag", []byte(" Put"))
+					tag := string(tagb)
+					if !strings.Contains(tag, "Put") {
+						win.Write("tag", []byte(" Put"))
+					}
+
+					changed = true
 				}
 
 				err = win.Ctl("addr=dot")
@@ -182,7 +187,15 @@ func src(id int) <-chan int {
 			case 'x', 'X':
 				evtText := string(evt.Text)
 
-				if evtText == "Del" || evtText == "Delete" {
+				switch {
+				case evtText == "Put":
+					changed = false
+				case evtText == "Del":
+					if changed {
+						continue
+					}
+					fallthrough
+				case evtText == "Del" || evtText == "Delete":
 					win.Ctl("delete")
 					win.WriteEvent(evt)
 					return
